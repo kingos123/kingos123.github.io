@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Meridian Hall Pricing Master Dashboard v31</title>
+    <title>Meridian Hall Pricing Master Dashboard v61 (Final Fix)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.7.0/chart.min.js"></script>
     <style>
@@ -14,12 +14,11 @@
         @media (min-width: 768px) { .chart-container { height: 400px; } }
 
         #seat-canvas {
-            cursor: grab;
             background-color: #fff;
             border-radius: 8px;
             box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            touch-action: none;
         }
-        #seat-canvas:active { cursor: grabbing; }
         
         .legend-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; margin-right: 6px; }
         
@@ -31,20 +30,42 @@
         [hidden] { display: none !important; }
         
         .budget-row:nth-child(even) { background-color: #f8fafc; }
-        .budget-input { border: 1px solid #cbd5e1; border-radius: 4px; padding: 2px 6px; width: 100px; text-align: right; }
+        
+        /* Inputs */
+        .data-input { 
+            border: 1px solid #cbd5e1; border-radius: 4px; padding: 2px 6px; width: 100%; 
+            text-align: right; font-family: monospace; color: #1e293b; transition: all 0.2s; font-size: 0.875rem;
+        }
+        .data-input:focus { outline: none; border-color: #4f46e5; box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.2); }
+
+        .map-input {
+            background: rgba(255, 255, 255, 0.9); border: none; border-radius: 3px; padding: 1px 4px;
+            text-align: center; font-weight: bold; color: #1e293b; width: 100%; font-size: 0.75rem;
+        }
+        .map-input:focus { background: #fff; outline: 2px solid rgba(0,0,0,0.2); }
+
+        /* Tools */
+        .tier-selector { cursor: pointer; transition: all 0.2s; border: 2px solid transparent; opacity: 0.7; transform: scale(0.95); }
+        .tier-selector:hover { opacity: 0.9; }
+        .tier-selector.active-tool { opacity: 1; border-color: #fbbf24; box-shadow: 0 0 15px rgba(251, 191, 36, 0.5); transform: scale(1); z-index: 10; }
+        
+        .mode-btn { padding: 0.5rem 1rem; border-radius: 0.5rem; font-weight: 600; font-size: 0.875rem; transition: all 0.2s; border: 1px solid transparent; }
+        .mode-btn.active { background-color: #4f46e5; color: white; border-color: #4338ca; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .mode-btn.inactive { background-color: #f1f5f9; color: #64748b; border-color: #cbd5e1; }
+        .mode-btn.inactive:hover { background-color: #e2e8f0; }
     </style>
-    <!-- V31: Restored Full Seasonality Content (Calendar + Pros/Cons Grid) -->
+    <!-- V61: Restored Event Listeners for Map Interaction -->
 </head>
 <body class="bg-slate-50 text-slate-900 min-h-screen">
 
     <div class="max-w-7xl mx-auto p-4 sm:p-6 lg:p-8">
         
-        <!-- GLOBAL HEADER -->
+        <!-- HEADER -->
         <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200 mb-6 flex flex-col md:flex-row justify-between items-start md:items-center">
             <div>
                 <h1 class="text-2xl md:text-3xl font-bold text-slate-800">JRCC 45th Anniversary Pricing</h1>
                 <p class="text-slate-500 mt-1 flex items-center gap-2">
-                    <span class="px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded text-xs font-bold uppercase">Optimized v31</span>
+                    <span class="px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded text-xs font-bold uppercase">Optimized v61</span>
                     Meridian Hall • March 19, 2026
                 </p>
             </div>
@@ -54,23 +75,19 @@
             </div>
         </div>
 
-        <!-- NAVIGATION TABS -->
+        <!-- ERROR BANNER -->
+        <div id="error-banner" class="hidden mb-6 bg-red-100 border-l-4 border-red-500 text-red-700 p-4 rounded shadow-md" role="alert">
+            <p class="font-bold">Capacity Limit Exceeded!</p>
+            <p>Allocated: <span id="error-count" class="font-bold">0</span> / 3,166. Please reduce quantities in the Map Tab.</p>
+        </div>
+
+        <!-- TABS -->
         <div class="flex space-x-1 bg-slate-200 p-1 rounded-lg mb-6 max-w-5xl overflow-x-auto">
-            <button onclick="window.switchTab('financials')" id="btn-financials" class="flex-1 whitespace-nowrap py-2 px-4 rounded-md text-sm font-bold shadow-sm bg-white text-slate-900 transition-all">
-                1. Revenue
-            </button>
-            <button onclick="window.switchTab('budget')" id="btn-budget" class="flex-1 whitespace-nowrap py-2 px-4 rounded-md text-sm font-medium text-slate-600 hover:bg-white/50 transition-all">
-                2. Budget & Costs
-            </button>
-            <button onclick="window.switchTab('map')" id="btn-map" class="flex-1 whitespace-nowrap py-2 px-4 rounded-md text-sm font-medium text-slate-600 hover:bg-white/50 transition-all">
-                3. Exact Seat Map
-            </button>
-            <button onclick="window.switchTab('artists')" id="btn-artists" class="flex-1 whitespace-nowrap py-2 px-4 rounded-md text-sm font-medium text-slate-600 hover:bg-white/50 transition-all">
-                4. Artist Intel
-            </button>
-            <button onclick="window.switchTab('research')" id="btn-research" class="flex-1 whitespace-nowrap py-2 px-4 rounded-md text-sm font-medium text-slate-600 hover:bg-white/50 transition-all">
-                5. Seasonality
-            </button>
+            <button onclick="window.switchTab('financials')" id="btn-financials" class="flex-1 whitespace-nowrap py-2 px-4 rounded-md text-sm font-bold shadow-sm bg-white text-slate-900 transition-all">1. Revenue Summary</button>
+            <button onclick="window.switchTab('budget')" id="btn-budget" class="flex-1 whitespace-nowrap py-2 px-4 rounded-md text-sm font-medium text-slate-600 hover:bg-white/50 transition-all">2. Budget & Costs</button>
+            <button onclick="window.switchTab('map')" id="btn-map" class="flex-1 whitespace-nowrap py-2 px-4 rounded-md text-sm font-medium text-slate-600 hover:bg-white/50 transition-all">3. Exact Seat Map</button>
+            <button onclick="window.switchTab('artists')" id="btn-artists" class="flex-1 whitespace-nowrap py-2 px-4 rounded-md text-sm font-medium text-slate-600 hover:bg-white/50 transition-all">4. Artist Intel</button>
+            <button onclick="window.switchTab('research')" id="btn-research" class="flex-1 whitespace-nowrap py-2 px-4 rounded-md text-sm font-medium text-slate-600 hover:bg-white/50 transition-all">5. Seasonality</button>
         </div>
 
         <!-- TAB 1: REVENUE -->
@@ -79,7 +96,7 @@
                 <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
                     <h3 class="text-slate-500 text-xs font-bold uppercase tracking-wide">Ticket Revenue Potential</h3>
                     <p id="kpi-optimized" class="text-3xl font-bold text-indigo-700 mt-2">$0</p>
-                    <p class="text-xs text-slate-400 mt-1">From seat sales</p>
+                    <p class="text-xs text-slate-400 mt-1">Based on allocation</p>
                 </div>
                 <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
                     <h3 class="text-slate-500 text-xs font-bold uppercase tracking-wide">Total Estimated Costs</h3>
@@ -87,37 +104,29 @@
                     <p class="text-xs text-slate-400 mt-1">Includes unknown estimates</p>
                 </div>
                 <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-                    <h3 class="text-slate-500 text-xs font-bold uppercase tracking-wide">Break-Even Gap</h3>
-                    <p id="kpi-gap" class="text-3xl font-bold text-red-600 mt-2">$0</p>
-                    <p class="text-xs text-slate-400 mt-1">Donations needed</p>
+                    <h3 class="text-slate-500 text-xs font-bold uppercase tracking-wide">Allocated Seats</h3>
+                    <p id="kpi-seats" class="text-3xl font-bold text-slate-800 mt-2">0 / 3,166</p>
+                    <p class="text-xs text-slate-400 mt-1">Venue Capacity</p>
                 </div>
             </div>
+            
+            <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                <div class="px-6 py-4 border-b border-slate-100 flex justify-between items-center"><h3 class="font-bold text-slate-800">Revenue Breakdown</h3><span class="text-xs text-indigo-600 bg-indigo-50 px-2 py-1 rounded font-semibold">Live Sync from Map</span></div>
+                <div class="overflow-x-auto"><table class="min-w-full text-sm"><thead class="bg-slate-50"><tr><th class="px-6 py-3 text-left font-bold text-slate-500 uppercase">Level</th><th class="px-6 py-3 text-left font-bold text-slate-500 uppercase">Name</th><th class="px-6 py-3 text-right font-bold text-slate-500 uppercase">Qty</th><th class="px-6 py-3 text-right font-bold text-slate-500 uppercase">Price</th><th class="px-6 py-3 text-right font-bold text-slate-500 uppercase">Total</th></tr></thead><tbody id="revenue-table-body" class="divide-y divide-slate-100"></tbody></table></div>
+            </div>
+
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
                     <h3 class="font-bold text-slate-800 mb-4">Revenue vs Cost Analysis</h3>
                     <div class="chart-container"><canvas id="revenueChart"></canvas></div>
+                    <p class="text-xs text-center text-slate-400 mt-2">Comparing AI Optimal vs Your Scenario</p>
                 </div>
                 <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-                    <h3 class="font-bold text-slate-800 text-lg mb-4">Financial Health Check</h3>
-                    <div class="p-4 bg-red-50 border-l-4 border-red-500 rounded mb-4">
-                        <h4 class="font-bold text-red-800 text-sm">Projected Deficit</h4>
-                        <p class="text-sm text-red-700 mt-1">
-                            Costs ($555k) currently exceed maximum ticket revenue ($405k). As this is a Gala, <strong>$150k+ in sponsorship/donations</strong> is required to break even.
-                        </p>
-                    </div>
+                    <h3 class="font-bold text-slate-800 text-lg mb-4">Financial Overview</h3>
                     <div class="space-y-3">
-                        <div class="flex justify-between items-center p-3 bg-slate-50 rounded">
-                            <span class="text-sm font-medium text-slate-600">Fixed Costs (Venue/Artists)</span>
-                            <span class="text-sm font-bold text-slate-800">$537,556</span>
-                        </div>
-                        <div class="flex justify-between items-center p-3 bg-slate-50 rounded">
-                            <span class="text-sm font-medium text-slate-600">Variable/Unknown Costs</span>
-                            <span class="text-sm font-bold text-slate-800" id="var-cost-display">$18,000</span>
-                        </div>
-                        <div class="flex justify-between items-center p-3 bg-indigo-50 rounded border border-indigo-100">
-                            <span class="text-sm font-bold text-indigo-700">Input Sponsorships:</span>
-                            <input type="number" id="input-sponsorship" value="0" class="text-right font-bold text-indigo-700 bg-white border border-indigo-200 rounded px-2 py-1 w-32" oninput="window.updateBudget()">
-                        </div>
+                        <div class="flex justify-between items-center p-3 bg-slate-50 rounded"><span class="text-sm font-medium text-slate-600">Total Revenue</span><span class="text-sm font-bold text-slate-800" id="summary-revenue">$0</span></div>
+                        <div class="flex justify-between items-center p-3 bg-slate-50 rounded"><span class="text-sm font-medium text-slate-600">Total Costs</span><span class="text-sm font-bold text-slate-800" id="summary-costs">$0</span></div>
+                        <div class="flex justify-between items-center p-3 bg-indigo-50 rounded border border-indigo-100"><span class="text-sm font-bold text-indigo-700">Sponsorships:</span><input type="number" id="input-sponsorship" value="0" class="data-input font-bold text-indigo-700 w-32" oninput="window.recalcAll(false)"></div>
                     </div>
                 </div>
             </div>
@@ -126,94 +135,98 @@
         <!-- TAB 2: BUDGET -->
         <div id="tab-budget" class="hidden space-y-6 tab-content">
             <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-                <div class="flex justify-between items-center mb-4">
-                    <h2 class="text-xl font-bold text-slate-800">Cost Breakdown</h2>
-                    <span class="text-xs bg-slate-100 px-2 py-1 rounded text-slate-500">Based on uploaded image</span>
-                </div>
-                <div class="overflow-x-auto">
-                    <table class="min-w-full text-sm">
-                        <thead class="bg-slate-50 border-b border-slate-200">
-                            <tr>
-                                <th class="px-4 py-3 text-left font-bold text-slate-600">Item</th>
-                                <th class="px-4 py-3 text-right font-bold text-slate-600">Status</th>
-                                <th class="px-4 py-3 text-right font-bold text-slate-600">Cost (CAD)</th>
-                            </tr>
-                        </thead>
-                        <tbody id="budget-table-body" class="divide-y divide-slate-100">
-                            <tr class="budget-row"><td class="px-4 py-2">Meridian Hall</td><td class="px-4 py-2 text-right text-green-600">Confirmed</td><td class="px-4 py-2 text-right font-mono">$77,870.70</td></tr>
-                            <tr class="budget-row"><td class="px-4 py-2">Akiva, Amir, Fried</td><td class="px-4 py-2 text-right text-green-600">Confirmed</td><td class="px-4 py-2 text-right font-mono">$173,750.00</td></tr>
-                            <tr class="budget-row"><td class="px-4 py-2">Mendy Hershkowitz Band</td><td class="px-4 py-2 text-right text-green-600">Confirmed</td><td class="px-4 py-2 text-right font-mono">$68,365.76</td></tr>
-                            <tr class="budget-row"><td class="px-4 py-2">Apex Production</td><td class="px-4 py-2 text-right text-green-600">Confirmed</td><td class="px-4 py-2 text-right font-mono">$27,800.00</td></tr>
-                            <tr class="budget-row"><td class="px-4 py-2">On Site Director</td><td class="px-4 py-2 text-right text-green-600">Confirmed</td><td class="px-4 py-2 text-right font-mono">$6,950.00</td></tr>
-                            <tr class="budget-row"><td class="px-4 py-2">Lights & Sound</td><td class="px-4 py-2 text-right text-green-600">Confirmed</td><td class="px-4 py-2 text-right font-mono">$27,800.00</td></tr>
-                            <tr class="budget-row"><td class="px-4 py-2">Visual Live</td><td class="px-4 py-2 text-right text-green-600">Confirmed</td><td class="px-4 py-2 text-right font-mono">$10,425.00</td></tr>
-                            <tr class="budget-row"><td class="px-4 py-2">Design & Marketing</td><td class="px-4 py-2 text-right text-green-600">Confirmed</td><td class="px-4 py-2 text-right font-mono">$34,750.00</td></tr>
-                            <tr class="budget-row"><td class="px-4 py-2">Elys Catering</td><td class="px-4 py-2 text-right text-green-600">Confirmed</td><td class="px-4 py-2 text-right font-mono">$15,000.00</td></tr>
-                            <tr class="budget-row"><td class="px-4 py-2">Food For Hall</td><td class="px-4 py-2 text-right text-green-600">Confirmed</td><td class="px-4 py-2 text-right font-mono">$1,500.00</td></tr>
-                            <tr class="budget-row"><td class="px-4 py-2">Flights</td><td class="px-4 py-2 text-right text-green-600">Confirmed</td><td class="px-4 py-2 text-right font-mono">$13,000.00</td></tr>
-                            <tr class="budget-row"><td class="px-4 py-2">Hotels</td><td class="px-4 py-2 text-right text-green-600">Confirmed</td><td class="px-4 py-2 text-right font-mono">$6,100.00</td></tr>
-                            <tr class="budget-row"><td class="px-4 py-2">Misc</td><td class="px-4 py-2 text-right text-green-600">Confirmed</td><td class="px-4 py-2 text-right font-mono">$25,500.00</td></tr>
-                            <tr class="budget-row"><td class="px-4 py-2">Admin</td><td class="px-4 py-2 text-right text-green-600">Confirmed</td><td class="px-4 py-2 text-right font-mono">$48,744.65</td></tr>
-                            <tr class="bg-red-50 border-l-4 border-red-400"><td class="px-4 py-2 font-bold text-red-800">Other Food (Crew)</td><td class="px-4 py-2 text-right text-red-600 text-xs italic">Estimate</td><td class="px-4 py-2 text-right"><input type="number" id="cost-food" value="3000" class="budget-input" oninput="window.updateBudget()"></td></tr>
-                            <tr class="bg-red-50 border-l-4 border-red-400"><td class="px-4 py-2 font-bold text-red-800">Local Transportation</td><td class="px-4 py-2 text-right text-red-600 text-xs italic">Estimate</td><td class="px-4 py-2 text-right"><input type="number" id="cost-transport" value="2500" class="budget-input" oninput="window.updateBudget()"></td></tr>
-                            <tr class="bg-red-50 border-l-4 border-red-400"><td class="px-4 py-2 font-bold text-red-800">VIP Fees (Venue)</td><td class="px-4 py-2 text-right text-red-600 text-xs italic">Estimate</td><td class="px-4 py-2 text-right"><input type="number" id="cost-vip" value="1500" class="budget-input" oninput="window.updateBudget()"></td></tr>
-                            <tr class="bg-red-50 border-l-4 border-red-400"><td class="px-4 py-2 font-bold text-red-800">Photography</td><td class="px-4 py-2 text-right text-red-600 text-xs italic">Estimate</td><td class="px-4 py-2 text-right"><input type="number" id="cost-photo" value="2000" class="budget-input" oninput="window.updateBudget()"></td></tr>
-                            <tr class="bg-red-50 border-l-4 border-red-400"><td class="px-4 py-2 font-bold text-red-800">Videography</td><td class="px-4 py-2 text-right text-red-600 text-xs italic">Estimate</td><td class="px-4 py-2 text-right"><input type="number" id="cost-video" value="4000" class="budget-input" oninput="window.updateBudget()"></td></tr>
-                            <tr class="bg-yellow-50 border-l-4 border-yellow-400"><td class="px-4 py-2 font-bold text-yellow-800">Processing Fees (3%)</td><td class="px-4 py-2 text-right text-yellow-600 text-xs italic">Calculated</td><td class="px-4 py-2 text-right font-mono" id="calc-cc-fees">$12,000</td></tr>
-                            <tr class="bg-yellow-50 border-l-4 border-yellow-400"><td class="px-4 py-2 font-bold text-yellow-800">SOCAN / Licensing</td><td class="px-4 py-2 text-right text-yellow-600 text-xs italic">Required</td><td class="px-4 py-2 text-right"><input type="number" id="cost-socan" value="2000" class="budget-input" oninput="window.updateBudget()"></td></tr>
-                        </tbody>
-                        <tfoot class="bg-slate-800 text-white">
-                            <tr><td class="px-4 py-3 font-bold text-lg">Total Expenses</td><td></td><td class="px-4 py-3 text-right font-bold text-lg font-mono" id="total-expenses-display">$0</td></tr>
-                        </tfoot>
-                    </table>
-                </div>
+                <div class="flex justify-between items-center mb-4"><h2 class="text-xl font-bold text-slate-800">Cost Breakdown</h2></div>
+                <div class="overflow-x-auto"><table class="min-w-full text-sm"><thead class="bg-slate-50 border-b border-slate-200"><tr><th class="px-4 py-3 text-left font-bold text-slate-600">Item</th><th class="px-4 py-3 text-right font-bold text-slate-600">Status</th><th class="px-4 py-3 text-right font-bold text-slate-600">Cost (CAD)</th></tr></thead><tbody id="budget-table-body" class="divide-y divide-slate-100">
+                    <tr class="budget-row"><td class="px-4 py-2">Meridian Hall</td><td class="px-4 py-2 text-right text-green-600">Confirmed</td><td class="px-4 py-2 text-right"><input type="number" class="data-input cost-item" value="77870.70" oninput="window.recalcCosts()"></td></tr>
+                    <tr class="budget-row"><td class="px-4 py-2">Akiva, Amir, Fried</td><td class="px-4 py-2 text-right text-green-600">Confirmed</td><td class="px-4 py-2 text-right"><input type="number" class="data-input cost-item" value="173750.00" oninput="window.recalcCosts()"></td></tr>
+                    <tr class="budget-row"><td class="px-4 py-2">Mendy Hershkowitz Band</td><td class="px-4 py-2 text-right text-green-600">Confirmed</td><td class="px-4 py-2 text-right"><input type="number" class="data-input cost-item" value="68365.76" oninput="window.recalcCosts()"></td></tr>
+                    <tr class="budget-row"><td class="px-4 py-2">Apex Production</td><td class="px-4 py-2 text-right text-green-600">Confirmed</td><td class="px-4 py-2 text-right"><input type="number" class="data-input cost-item" value="27800.00" oninput="window.recalcCosts()"></td></tr>
+                    <tr class="budget-row"><td class="px-4 py-2">On Site Director</td><td class="px-4 py-2 text-right text-green-600">Confirmed</td><td class="px-4 py-2 text-right"><input type="number" class="data-input cost-item" value="6950.00" oninput="window.recalcCosts()"></td></tr>
+                    <tr class="budget-row"><td class="px-4 py-2">Lights & Sound</td><td class="px-4 py-2 text-right text-green-600">Confirmed</td><td class="px-4 py-2 text-right"><input type="number" class="data-input cost-item" value="27800.00" oninput="window.recalcCosts()"></td></tr>
+                    <tr class="budget-row"><td class="px-4 py-2">Visual Live</td><td class="px-4 py-2 text-right text-green-600">Confirmed</td><td class="px-4 py-2 text-right"><input type="number" class="data-input cost-item" value="10425.00" oninput="window.recalcCosts()"></td></tr>
+                    <tr class="budget-row"><td class="px-4 py-2">Design & Marketing</td><td class="px-4 py-2 text-right text-green-600">Confirmed</td><td class="px-4 py-2 text-right"><input type="number" class="data-input cost-item" value="34750.00" oninput="window.recalcCosts()"></td></tr>
+                    <tr class="budget-row"><td class="px-4 py-2">Elys Catering</td><td class="px-4 py-2 text-right text-green-600">Confirmed</td><td class="px-4 py-2 text-right"><input type="number" class="data-input cost-item" value="15000.00" oninput="window.recalcCosts()"></td></tr>
+                    <tr class="budget-row"><td class="px-4 py-2">Food For Hall</td><td class="px-4 py-2 text-right text-green-600">Confirmed</td><td class="px-4 py-2 text-right"><input type="number" class="data-input cost-item" value="1500.00" oninput="window.recalcCosts()"></td></tr>
+                    <tr class="budget-row"><td class="px-4 py-2">Flights</td><td class="px-4 py-2 text-right text-green-600">Confirmed</td><td class="px-4 py-2 text-right"><input type="number" class="data-input cost-item" value="13000.00" oninput="window.recalcCosts()"></td></tr>
+                    <tr class="budget-row"><td class="px-4 py-2">Hotels</td><td class="px-4 py-2 text-right text-green-600">Confirmed</td><td class="px-4 py-2 text-right"><input type="number" class="data-input cost-item" value="6100.00" oninput="window.recalcCosts()"></td></tr>
+                    <tr class="budget-row"><td class="px-4 py-2">Misc</td><td class="px-4 py-2 text-right text-green-600">Confirmed</td><td class="px-4 py-2 text-right"><input type="number" class="data-input cost-item" value="25500.00" oninput="window.recalcCosts()"></td></tr>
+                    <tr class="budget-row"><td class="px-4 py-2">Admin</td><td class="px-4 py-2 text-right text-green-600">Confirmed</td><td class="px-4 py-2 text-right"><input type="number" class="data-input cost-item" value="48744.65" oninput="window.recalcCosts()"></td></tr>
+                    <!-- ESTIMATES -->
+                    <tr class="bg-red-50 border-l-4 border-red-400"><td class="px-4 py-2 font-bold text-red-800">Other Food (Crew)</td><td class="px-4 py-2 text-right text-red-600 text-xs italic">Estimate</td><td class="px-4 py-2 text-right"><input type="number" class="data-input cost-item" value="3000" oninput="window.recalcCosts()"></td></tr>
+                    <tr class="bg-red-50 border-l-4 border-red-400"><td class="px-4 py-2 font-bold text-red-800">Local Transportation</td><td class="px-4 py-2 text-right text-red-600 text-xs italic">Estimate</td><td class="px-4 py-2 text-right"><input type="number" class="data-input cost-item" value="2500" oninput="window.recalcCosts()"></td></tr>
+                    <tr class="bg-red-50 border-l-4 border-red-400"><td class="px-4 py-2 font-bold text-red-800">VIP Fees (Venue)</td><td class="px-4 py-2 text-right text-red-600 text-xs italic">Estimate</td><td class="px-4 py-2 text-right"><input type="number" class="data-input cost-item" value="1500" oninput="window.recalcCosts()"></td></tr>
+                    <tr class="bg-red-50 border-l-4 border-red-400"><td class="px-4 py-2 font-bold text-red-800">Photography</td><td class="px-4 py-2 text-right text-red-600 text-xs italic">Estimate</td><td class="px-4 py-2 text-right"><input type="number" class="data-input cost-item" value="2000" oninput="window.recalcCosts()"></td></tr>
+                    <tr class="bg-red-50 border-l-4 border-red-400"><td class="px-4 py-2 font-bold text-red-800">Videography</td><td class="px-4 py-2 text-right text-red-600 text-xs italic">Estimate</td><td class="px-4 py-2 text-right"><input type="number" class="data-input cost-item" value="4000" oninput="window.recalcCosts()"></td></tr>
+                    <tr class="bg-yellow-50 border-l-4 border-yellow-400"><td class="px-4 py-2 font-bold text-yellow-800">Processing (3%)</td><td class="px-4 py-2 text-right text-yellow-600 text-xs italic">Calculated</td><td class="px-4 py-2 text-right font-mono" id="calc-cc-fees">$0</td></tr>
+                    <tr class="bg-yellow-50 border-l-4 border-yellow-400"><td class="px-4 py-2 font-bold text-yellow-800">SOCAN / Licensing</td><td class="px-4 py-2 text-right text-yellow-600 text-xs italic">Required</td><td class="px-4 py-2 text-right"><input type="number" class="data-input cost-item" value="2000" oninput="window.recalcCosts()"></td></tr>
+                </tbody><tfoot class="bg-slate-800 text-white"><tr><td class="px-4 py-3 font-bold text-lg">Total Expenses</td><td></td><td class="px-4 py-3 text-right font-bold text-lg font-mono" id="total-expenses-display">$0</td></tr></tfoot></table></div>
             </div>
         </div>
+        
 
         <!-- TAB 3: MAP -->
         <div id="tab-map" class="hidden space-y-6 tab-content">
-            <div class="bg-indigo-900 text-white p-6 rounded-xl shadow-lg mb-6">
-                <h2 class="text-xl font-bold mb-4 flex items-center gap-2">Excel Button Guide</h2>
-                <div class="grid grid-cols-4 sm:grid-cols-8 gap-3 text-center">
-                    <div class="bg-blue-500 p-2 rounded border-2 border-blue-300"><p class="text-[10px] opacity-70 font-bold">Price Level 1</p><p class="font-bold text-lg">$360</p></div>
-                    <div class="bg-pink-500 p-2 rounded border-2 border-pink-300"><p class="text-[10px] opacity-70 font-bold">Price Level 2</p><p class="font-bold text-lg">$180</p></div>
-                    <div class="bg-purple-500 p-2 rounded border-2 border-purple-300"><p class="text-[10px] opacity-70 font-bold">Price Level 3</p><p class="font-bold text-lg">$110</p></div>
-                    <div class="bg-orange-400 p-2 rounded border-2 border-orange-200"><p class="text-[10px] opacity-70 font-bold text-orange-900">Price Level 4</p><p class="font-bold text-lg text-orange-900">$75</p></div>
-                    <div class="bg-slate-700 p-2 rounded opacity-50 border-2 border-dashed border-slate-500"><p class="text-[10px]">Lvl 5</p><p class="text-xs">Unused</p></div>
-                    <div class="bg-slate-700 p-2 rounded opacity-50 border-2 border-dashed border-slate-500"><p class="text-[10px]">Lvl 6</p><p class="text-xs">Unused</p></div>
-                    <div class="bg-amber-900 p-2 rounded border-2 border-amber-700 col-span-2"><p class="text-[10px]">Lvl 7/8</p><p class="font-bold text-lg">Free</p></div>
+            <div class="bg-indigo-900 text-white p-4 rounded-xl shadow-lg mb-6">
+                <div class="flex flex-col md:flex-row justify-between items-center gap-4 mb-4">
+                    <h2 class="text-xl font-bold flex items-center gap-2">Allocation & Painting Tools</h2>
+                    <div class="flex bg-indigo-800 rounded-lg p-1">
+                        <button id="mode-move" onclick="window.setMode('move')" class="mode-btn inactive flex items-center gap-2"><svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 11.5V14m0-2.5v-6a1.5 1.5 0 113 0m-3 6a1.5 1.5 0 00-3 0v2a7.5 7.5 0 0015 0v-5a1.5 1.5 0 00-3 0m-6-3V11m0-5.5v-1a1.5 1.5 0 013 0v1m0 0V11m0-5.5a1.5 1.5 0 013 0v3m0 0V11" /></svg> Move</button>
+                        <button id="mode-paint" onclick="window.setMode('paint')" class="mode-btn active flex items-center gap-2"><svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" /></svg> Paint</button>
+                    </div>
                 </div>
+                <div class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3 text-center" id="tier-selectors"></div>
             </div>
             <div class="flex flex-col lg:flex-row gap-6">
                 <div class="flex-1 bg-white p-4 rounded-2xl shadow-lg border border-slate-200 relative flex flex-col items-center">
-                    <div class="w-full flex justify-between mb-4"><h2 class="text-lg font-bold text-slate-800">Interactive Venue Map</h2>
-                    <div class="flex gap-2"><button onclick="window.mapZoomOut()" class="px-2 border rounded">-</button><button onclick="window.mapReset()" class="px-2 border rounded">Reset</button><button onclick="window.mapZoomIn()" class="px-2 border rounded">+</button></div></div>
-                    <div class="relative overflow-hidden w-full h-[600px] bg-slate-50 rounded border border-slate-100 p-0"><canvas id="seat-canvas" width="1200" height="1000" class="w-full h-full block"></canvas></div>
+                    <div class="w-full flex justify-between mb-4"><h2 class="text-lg font-bold text-slate-800">Interactive Venue Map</h2><div class="flex gap-2"><button onclick="window.mapZoomOut()" class="px-3 border rounded hover:bg-gray-100 font-bold text-xl">-</button><button onclick="window.mapReset()" class="px-3 border rounded hover:bg-gray-100 text-sm">Reset</button><button onclick="window.mapZoomIn()" class="px-3 border rounded hover:bg-gray-100 font-bold text-xl">+</button></div></div>
+                    <div class="relative overflow-hidden w-full h-[600px] bg-slate-50 rounded border border-slate-100 p-0 cursor-crosshair"><canvas id="seat-canvas" width="1200" height="1000" class="w-full h-full block"></canvas></div>
                 </div>
                 <div class="w-full lg:w-64 bg-white p-5 rounded-xl shadow-md border border-slate-200 h-[600px]">
-                    <h3 class="text-xs font-bold text-slate-400 uppercase mb-1">Seat Details</h3><h2 id="hover-info" class="text-lg font-bold text-indigo-700">--</h2><span id="hover-tier" class="text-sm font-bold text-slate-600">--</span>
-                </div>
+                    <h3 class="text-xs font-bold text-slate-400 uppercase mb-1">Seat Details</h3><h2 id="hover-info" class="text-lg font-bold text-indigo-700">--</h2><span id="hover-tier" class="text-sm font-bold text-slate-600">--</span><div class="mt-8 p-4 bg-blue-50 text-xs text-blue-800 rounded"><strong>Instructions:</strong><br>1. Select <strong>Paint</strong>.<br>2. Click a Color.<br>3. Drag on map to paint.<br><em>Type quantities in boxes to auto-fill.</em></div></div>
             </div>
         </div>
 
         <!-- TAB 4: ARTISTS -->
         <div id="tab-artists" class="hidden space-y-6 tab-content">
-             <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200 mb-6">
-                <h2 class="text-xl font-bold text-slate-800 mb-4">Historical Comparison</h2>
-                <div class="chart-container mb-8 h-64"><canvas id="benchmarkChart"></canvas></div>
+            <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200 mb-6"><h2 class="text-xl font-bold text-slate-800 mb-4">Historical Comparison</h2><div class="chart-container mb-8 h-64"><canvas id="benchmarkChart"></canvas></div></div>
+            
+            <!-- STRATEGIC CARDS -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+                <div class="bg-blue-50 p-6 rounded-xl border border-blue-100 shadow-sm">
+                    <h3 class="font-bold text-blue-900 text-lg">Avraham Fried</h3>
+                    <p class="text-xs uppercase font-bold text-blue-500 mt-1 mb-3">The Anchor</p>
+                    <p class="text-sm text-blue-800 leading-relaxed">Justifies the <strong>$360 VIP</strong> tier. Core audience is donor-class, low price sensitivity.</p>
+                </div>
+                <div class="bg-pink-50 p-6 rounded-xl border border-pink-100 shadow-sm">
+                    <h3 class="font-bold text-pink-900 text-lg">Akiva</h3>
+                    <p class="text-xs uppercase font-bold text-pink-500 mt-1 mb-3">The Trend</p>
+                    <p class="text-sm text-pink-800 leading-relaxed">Drives <strong>$180 Premium</strong> sales. Attracts younger families and couples.</p>
+                </div>
+                <div class="bg-purple-50 p-6 rounded-xl border border-purple-100 shadow-sm">
+                    <h3 class="font-bold text-purple-900 text-lg">Amir Dadon</h3>
+                    <p class="text-xs uppercase font-bold text-purple-500 mt-1 mb-3">The Crossover</p>
+                    <p class="text-sm text-purple-800 leading-relaxed">Fills <strong>Standard ($110)</strong> and <strong>Entry ($75)</strong> tiers. Appeals to broader Israeli demographic.</p>
+                </div>
             </div>
+
+            <!-- FULL DATA TABLE -->
             <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-                <table class="min-w-full divide-y divide-slate-200">
-                    <thead class="bg-slate-50"><tr><th class="px-6 py-3 text-left">Artist</th><th class="px-6 py-3">Event</th><th class="px-6 py-3 text-right">VIP Price</th></tr></thead>
+                <div class="px-6 py-3 border-b border-slate-100 font-bold text-slate-700 bg-slate-50">Benchmark Data Points</div>
+                <table class="min-w-full divide-y divide-slate-200 text-sm">
+                    <thead class="bg-slate-50"><tr><th class="px-6 py-3 text-left">Artist</th><th class="px-6 py-3">Event Context</th><th class="px-6 py-3 text-right">Top Price</th></tr></thead>
                     <tbody class="divide-y divide-slate-200">
-                        <tr class="bg-blue-50/30"><td class="px-6 py-4 font-bold">Fried</td><td class="px-6 py-4">HASC</td><td class="px-6 py-4 text-right">$500+</td></tr>
-                        <tr class="bg-pink-50/30"><td class="px-6 py-4 font-bold">Akiva</td><td class="px-6 py-4">NYC Town Hall</td><td class="px-6 py-4 text-right">$180</td></tr>
+                        <tr class="bg-blue-50/30"><td class="px-6 py-3 font-bold text-blue-900">Fried</td><td class="px-6 py-3">HASC Concert (NYC)</td><td class="px-6 py-3 text-right font-mono">$1,000+</td></tr>
+                        <tr class="bg-blue-50/30"><td class="px-6 py-3 font-medium text-slate-600">Fried</td><td class="px-6 py-3">Sultan's Pool (Jerusalem)</td><td class="px-6 py-3 text-right font-mono">₪500</td></tr>
+                        <tr class="bg-pink-50/30"><td class="px-6 py-3 font-bold text-pink-900">Akiva</td><td class="px-6 py-3">Town Hall (NYC)</td><td class="px-6 py-3 text-right font-mono">$180</td></tr>
+                        <tr class="bg-pink-50/30"><td class="px-6 py-3 font-medium text-slate-600">Akiva</td><td class="px-6 py-3">Tel Aviv Heichal</td><td class="px-6 py-3 text-right font-mono">₪300</td></tr>
+                        <tr class="bg-purple-50/30"><td class="px-6 py-3 font-bold text-purple-900">Dadon</td><td class="px-6 py-3">Zappa Tour</td><td class="px-6 py-3 text-right font-mono">₪249</td></tr>
+                        <tr class="bg-purple-50/30"><td class="px-6 py-3 font-medium text-slate-600">Dadon</td><td class="px-6 py-3">Caesarea Amphitheater</td><td class="px-6 py-3 text-right font-mono">₪350</td></tr>
                     </tbody>
                 </table>
             </div>
         </div>
 
-        <!-- TAB 5: RESEARCH (FULL RESTORED) -->
+        <!-- TAB 5: RESEARCH -->
         <div id="tab-research" class="hidden space-y-6 tab-content">
             <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
                 <div class="flex items-center gap-3 mb-6">
@@ -293,123 +306,178 @@
 
     <script>
         (function() {
-            // --- CONFIG ---
-            const fixedCosts = 537556.11; // From Image
-            const proposedRevenue = 226125;
+            const aiRevenue = 337000; 
+            const VENUE_CAPACITY = 3166;
             
-            const optimizedData = [
-                { excelLevel: 'Level 1', name: 'VIP', seats: 300, price: 360 },
-                { excelLevel: 'Level 2', name: 'Premium', seats: 900, price: 180 },
-                { excelLevel: 'Level 3', name: 'Standard', seats: 850, price: 110 },
-                { excelLevel: 'Level 4', name: 'Entry', seats: 550, price: 75 },
-                { excelLevel: 'Level 7/8', name: 'Free', seats: 566, price: 0 }
+            let tiers = [
+                { id: 0, name: 'Price Level 1', price: 360, color: '#3b82f6', cssClass: 'bg-blue-500 border-blue-300', seats: 113 },
+                { id: 1, name: 'Price Level 2', price: 180, color: '#ec4899', cssClass: 'bg-pink-500 border-pink-300', seats: 600 },
+                { id: 2, name: 'Price Level 3', price: 110, color: '#a855f7', cssClass: 'bg-purple-500 border-purple-300', seats: 1337 },
+                { id: 3, name: 'Price Level 4', price: 75, color: '#fb923c', cssClass: 'bg-orange-400 border-orange-200', seats: 550 },
+                { id: 4, name: 'Price Level 5', price: 0, color: '#334155', cssClass: 'bg-slate-700 opacity-50 border-slate-500', seats: 0 },
+                { id: 5, name: 'Price Level 6', price: 0, color: '#334155', cssClass: 'bg-slate-700 opacity-50 border-slate-500', seats: 0 },
+                { id: 6, name: 'Price Level 7/8', price: 0, color: '#713f12', cssClass: 'bg-amber-900 border-amber-700', seats: 566 }
             ];
 
-            const TierColors = { VIP: '#3b82f6', PREM: '#ec4899', STD: '#a855f7', ENTRY: '#fb923c', FREE: '#713f12' };
-            
-            let seats = [];
-            let rowLabels = []; 
-            let scale = 1; let pX = 0; let pY = 0; let isDragging = false; let startDrag = {x:0,y:0};
-            let totalTicketRevenue = 0;
+            let seats = []; let rowLabels = []; let activeTool = 0; let mapMode = 'paint';
+            let scale = 1, pX = 0, pY = 0, isDragging = false, startDrag = {x:0,y:0}, isPainting = false;
+            let revChart = null;
 
-            // --- BUDGET CALCULATOR ---
-            window.updateBudget = function() {
-                const cFood = parseFloat(document.getElementById('cost-food').value) || 0;
-                const cTrans = parseFloat(document.getElementById('cost-transport').value) || 0;
-                const cVip = parseFloat(document.getElementById('cost-vip').value) || 0;
-                const cPhoto = parseFloat(document.getElementById('cost-photo').value) || 0;
-                const cVideo = parseFloat(document.getElementById('cost-video').value) || 0;
-                const cSocan = parseFloat(document.getElementById('cost-socan').value) || 0;
-                
-                const ccFees = totalTicketRevenue * 0.03;
-                document.getElementById('calc-cc-fees').textContent = formatCurrency(ccFees);
-
-                const variableCosts = cFood + cTrans + cVip + cPhoto + cVideo + cSocan + ccFees;
-                const totalExpenses = fixedCosts + variableCosts;
-                
-                const sponsorships = parseFloat(document.getElementById('input-sponsorship').value) || 0;
-                const netProfit = (totalTicketRevenue + sponsorships) - totalExpenses;
-
-                document.getElementById('kpi-costs').textContent = formatCurrency(totalExpenses);
-                document.getElementById('var-cost-display').textContent = formatCurrency(variableCosts);
-                document.getElementById('total-expenses-display').textContent = formatCurrency(totalExpenses);
-                
-                const gapEl = document.getElementById('kpi-gap');
-                const profEl = document.getElementById('global-profit');
-                
-                gapEl.textContent = formatCurrency(Math.min(0, netProfit));
-                profEl.textContent = formatCurrency(netProfit);
-                
-                if(netProfit >= 0) {
-                    profEl.classList.remove('text-red-600'); profEl.classList.add('text-green-600');
-                    profEl.textContent = '+' + formatCurrency(netProfit);
-                } else {
-                    profEl.classList.remove('text-green-600'); profEl.classList.add('text-red-600');
-                    profEl.textContent = '(' + formatCurrency(Math.abs(netProfit)) + ')';
-                }
+            function init() {
+                initMap();
+                renderToolSelectors();
+                setupCanvasEvents(); // CRITICAL FIX: Enables interaction immediately
+                updateMapFromInputs();
+                renderChart(aiRevenue, aiRevenue);
+                renderBenchmarkChart();
+                window.switchTab('financials');
+                window.addEventListener('resize', draw);
             }
 
-            // --- MAP GENERATION ---
-            function initMap() {
-                seats = [];
-                rowLabels = [];
+            function renderToolSelectors() {
+                const container = document.getElementById('tier-selectors');
+                container.innerHTML = '';
+                tiers.forEach((t, i) => {
+                    const isActive = i === activeTool ? 'active-tool' : '';
+                    const div = document.createElement('div');
+                    div.className = `tier-selector p-2 rounded border-2 flex flex-col gap-1 ${t.cssClass} ${isActive}`;
+                    div.onclick = () => setTool(i);
+                    const isFree = i === 6; const readOnly = isFree ? 'disabled' : ''; const changeHandler = isFree ? '' : `onchange="window.updateQty(${i}, this.value)"`;
+                    div.innerHTML = `<p class="text-[10px] opacity-90 font-bold text-white">${t.name}</p><div class="flex items-center gap-1 justify-center"><span class="text-xs text-white">$</span><input type="number" value="${t.price}" class="map-input" onchange="window.updatePrice(${i}, this.value)" onclick="event.stopPropagation()"></div><div class="flex items-center gap-1 justify-center"><span class="text-[9px] text-white opacity-80">Qty</span><input id="qty-in-${i}" type="number" value="${t.seats}" class="map-input" ${changeHandler} ${readOnly} onclick="event.stopPropagation()"></div>`;
+                    container.appendChild(div);
+                });
+            }
+
+            window.setTool = function(index) { activeTool = index; renderToolSelectors(); window.setMode('paint'); }
+            window.setMode = function(mode) {
+                mapMode = mode;
+                document.getElementById('mode-paint').className = mode==='paint'?'mode-btn active flex items-center gap-2':'mode-btn inactive flex items-center gap-2';
+                document.getElementById('mode-move').className = mode==='move'?'mode-btn active flex items-center gap-2':'mode-btn inactive flex items-center gap-2';
+                document.getElementById('seat-canvas').style.cursor = mode==='paint'?'crosshair':'grab';
+            }
+
+            // --- ROBUST COORD MATH ---
+            function getWorldPos(e) {
                 const canvas = document.getElementById('seat-canvas');
-                if(!canvas) return;
+                const rect = canvas.getBoundingClientRect();
+                const scaleX = canvas.width / rect.width;
+                const scaleY = canvas.height / rect.height;
+                const canvasX = (e.clientX - rect.left) * scaleX;
+                const canvasY = (e.clientY - rect.top) * scaleY;
+                return { x: (canvasX - pX) / scale, y: (canvasY - pY) / scale };
+            }
+
+            window.updatePrice = (idx, val) => { tiers[idx].price = parseFloat(val)||0; recalcFinancialsOnly(); };
+            window.updateQty = (idx, val) => { tiers[idx].seats = parseInt(val)||0; updateMapFromInputs(); };
+            window.recalcCosts = () => recalcFinancialsOnly();
+
+            function updateMapFromInputs() {
+                let used = 0; for(let i=0; i<6; i++) used += tiers[i].seats;
+                tiers[6].seats = Math.max(0, VENUE_CAPACITY - used);
+                if(document.getElementById('qty-in-6')) document.getElementById('qty-in-6').value = tiers[6].seats;
                 
-                // 1. ORCHESTRA CENTER
+                let currentCount = 0;
+                const limits = tiers.map(t => { currentCount += t.seats; return currentCount; });
+                seats.forEach((s, i) => {
+                    if (i < limits[0]) s.t = 0; else if (i < limits[1]) s.t = 1; else if (i < limits[2]) s.t = 2; else if (i < limits[3]) s.t = 3; else if (i < limits[4]) s.t = 4; else if (i < limits[5]) s.t = 5; else s.t = 6;
+                });
+                draw(); recalcFinancialsOnly();
+            }
+
+            function updateInputsFromMap() {
+                tiers.forEach(t => t.seats = 0);
+                seats.forEach(s => tiers[s.t].seats++);
+                tiers.forEach((t, i) => { const el = document.getElementById(`qty-in-${i}`); if(el) el.value = t.seats; });
+                recalcFinancialsOnly();
+            }
+
+            window.recalcAll = function(recount) { if(recount) updateInputsFromMap(); recalcFinancialsOnly(); }
+
+            function recalcFinancialsOnly() {
+                let totalRevenue = 0; let totalSeats = 0;
+                tiers.forEach(t => { totalRevenue += t.seats * t.price; totalSeats += t.seats; });
+
+                const tbody = document.getElementById('revenue-table-body');
+                if(tbody) {
+                    tbody.innerHTML = '';
+                    tiers.forEach(t => {
+                        if(t.seats > 0 || t.price > 0) tbody.innerHTML += `<tr><td class="px-6 py-2">${t.name}</td><td class="px-6 py-2">${t.name}</td><td class="px-6 py-2 text-right">${t.seats}</td><td class="px-6 py-2 text-right font-bold">${formatCurrency(t.price)}</td><td class="px-6 py-2 text-right font-bold text-indigo-600">${formatCurrency(t.seats*t.price)}</td></tr>`;
+                    });
+                }
+                document.getElementById('kpi-seats').textContent = `${totalSeats.toLocaleString()} / ${VENUE_CAPACITY.toLocaleString()}`;
+
+                let totalExpenses = 0;
+                document.querySelectorAll('.cost-item').forEach(i => totalExpenses += parseFloat(i.value)||0);
+                const ccFees = totalRevenue * 0.03; totalExpenses += ccFees;
+                if(document.getElementById('calc-cc-fees')) document.getElementById('calc-cc-fees').textContent = formatCurrency(ccFees);
+
+                const sponsorships = parseFloat(document.getElementById('input-sponsorship').value)||0;
+                const profit = (totalRevenue + sponsorships) - totalExpenses;
+
+                document.getElementById('kpi-optimized').textContent = formatCurrency(totalRevenue);
+                document.getElementById('kpi-costs').textContent = formatCurrency(totalExpenses);
+                document.getElementById('summary-revenue').textContent = formatCurrency(totalRevenue + sponsorships);
+                document.getElementById('summary-costs').textContent = formatCurrency(totalExpenses);
+                document.getElementById('total-expenses-display').textContent = formatCurrency(totalExpenses);
+
+                const profEl = document.getElementById('global-profit');
+                profEl.textContent = (profit>=0 ? '+' : '') + formatCurrency(profit);
+                profEl.className = profit >= 0 ? 'text-3xl md:text-4xl font-bold text-green-600' : 'text-3xl md:text-4xl font-bold text-red-600';
+
+                if(revChart) { revChart.data.datasets[0].data = [aiRevenue, totalRevenue]; revChart.update(); }
+            }
+
+            function initMap() {
+                seats = []; rowLabels = [];
+                // ORCH CENTER
                 for(let r=0; r<25; r++) {
                     const rowLabel = (r < 5) ? ['AA','BB','CC','DD','EE'][r] : String.fromCharCode(65 + (r-5));
-                    const seatsInRow = 25 + r; const y = 120 + (r * 14);
-                    const rowWidth = 300 + (r * 12); const xStart = 600 - (rowWidth/2); const xStep = rowWidth / seatsInRow;
+                    const seatsInRow = 25 + r; const y = 120 + (r * 14); const rowWidth = 300 + (r * 12); const xStart = 600 - (rowWidth/2); const xStep = rowWidth / seatsInRow;
                     rowLabels.push({x: xStart - 20, y: y, text: rowLabel}); rowLabels.push({x: xStart + rowWidth + 10, y: y, text: rowLabel});
                     for(let s=0; s<seatsInRow; s++) {
                         const finalX = xStart + (s * xStep); const curveOffset = Math.cos((s - seatsInRow/2) * 0.15) * 10;
-                        let c = TierColors.STD; let t = "Price Level 3";
-                        if (r < 12) { c = TierColors.VIP; t = "Price Level 1"; } else if (r < 20) { c = TierColors.PREM; t = "Price Level 2"; }
-                        seats.push({x: finalX, y: y - curveOffset, r: 4, c: c, l: `Orch Ctr Row ${rowLabel}`, t: t});
+                        let tIdx = 6; if(r<7) tIdx=6; else if(r<15) tIdx=0; else if(r<22) tIdx=1; else tIdx=2;
+                        seats.push({x: finalX, y: y - curveOffset, r: 4, t: tIdx, l: `Orch Ctr ${rowLabel}`, rank: 1000 + (r*100) + Math.abs(s - seatsInRow/2)});
                     }
                 }
-                // 2. WINGS
+                // WINGS
                 const sideRowLetters = ['A','B','C','D','E','F','G','H','J','K','L','M','N','P','R','S','T','U','V','W'];
                 for(let r=0; r<20; r++) {
                     const y = 180 + (r * 14); const xBaseL = 250 - (r * 8); const xBaseR = 950 + (r * 8);
                     rowLabels.push({x: xBaseL - 160, y: y, text: sideRowLetters[r]}); rowLabels.push({x: xBaseR + 160, y: y, text: sideRowLetters[r]});
                     for(let s=0; s<15; s++) {
                         const tilt = s * 5;
-                        seats.push({x: xBaseL - (s*10), y: y - tilt, r: 4, c: TierColors.STD, l: `Orch Left Row ${sideRowLetters[r]}`, t: 'Price Level 3'});
-                        seats.push({x: xBaseR + (s*10), y: y - tilt, r: 4, c: TierColors.STD, l: `Orch Right Row ${sideRowLetters[r]}`, t: 'Price Level 3'});
+                        seats.push({x: xBaseL - (s*10), y: y - tilt, r: 4, t: 2, l: `Orch Left`, rank: 2000 + (r*100) + s});
+                        seats.push({x: xBaseR + (s*10), y: y - tilt, r: 4, t: 2, l: `Orch Right`, rank: 2000 + (r*100) + s});
                     }
                 }
-                // 3. MEZZ
-                const mezzLetters = ['AA','BB','CC','DD','EE','FF'];
+                // MEZZ
                 for(let r=0; r<6; r++) {
-                    const width = 60; const lbl = mezzLetters[r]; const midY = 550 + (r * 14);
+                    const width = 60; const lbl = ['AA','BB','CC','DD','EE','FF'][r]; const midY = 550 + (r * 14);
                     rowLabels.push({x: 280, y: midY, text: lbl}); rowLabels.push({x: 920, y: midY, text: lbl});
                     for(let s=0; s<width; s++) {
                         const curveY = midY + (Math.cos((s-30)*0.1)*25);
-                        let c = (r < 2) ? TierColors.PREM : TierColors.STD; let t = (r < 2) ? "Price Level 2" : "Price Level 3";
-                        seats.push({x: 300 + (s*10), y: curveY, r: 3.5, c: c, l: `Mezz Row ${lbl}`, t: t});
+                        let tIdx = (r<2) ? 1 : 2;
+                        seats.push({x: 300 + (s*10), y: curveY, r: 3.5, t: tIdx, l: `Mezz ${lbl}`, rank: 3000 + (r*100) + Math.abs(s-30)});
                     }
                 }
-                // 4. BALC
-                const balcLetters = ['A','B','C','D','E','F','G','H','J','K','L','M'];
+                // BALC
                 for(let r=0; r<12; r++) {
-                    const width = 40; const lbl = balcLetters[r]; const midY = 750 + (r * 12);
+                    const width = 40; const lbl = ['A','B','C','D','E','F','G','H','J','K','L','M'][r]; const midY = 750 + (r * 12);
                     rowLabels.push({x: 380, y: midY, text: lbl}); rowLabels.push({x: 820, y: midY, text: lbl});
                     for(let s=0; s<width; s++) {
                         const curveY = midY + (Math.cos((s-20)*0.15)*10);
-                        let c = (r < 5) ? TierColors.ENTRY : TierColors.FREE; let t = (r < 5) ? "Price Level 4" : "Price Level 7/8";
-                        seats.push({x: 400 + (s*10), y: curveY, r: 3, c: c, l: `Balc Ctr Row ${lbl}`, t: t});
+                        let tIdx = (r<5) ? 3 : 6;
+                        seats.push({x: 400 + (s*10), y: curveY, r: 3, t: tIdx, l: `Balc Ctr ${lbl}`, rank: 4000 + (r*100) + Math.abs(s-20)});
                     }
                 }
                 for(let r=0; r<12; r++) {
                     for(let s=0; s<14; s++) {
-                        seats.push({x: 150 + (s*10), y: 750 + (r*10), r: 3, c: TierColors.FREE, l: `Balc Left`, t: 'Price Level 7/8'});
-                        seats.push({x: 900 + (s*10), y: 750 + (r*10), r: 3, c: TierColors.FREE, l: `Balc Right`, t: 'Price Level 7/8'});
+                        seats.push({x: 150 + (s*10), y: 750 + (r*10), r: 3, t: 6, l: `Balc Left`, rank: 5000 + (r*100) + s});
+                        seats.push({x: 900 + (s*10), y: 750 + (r*10), r: 3, t: 6, l: `Balc Right`, rank: 5000 + (r*100) + s});
                     }
                 }
-                draw();
-                setupInteraction();
+                seats.sort((a, b) => a.rank - b.rank);
             }
 
             function draw() {
@@ -419,58 +487,80 @@
                 ctx.fillStyle = '#64748b'; ctx.font = 'bold 16px Inter'; ctx.textAlign = 'center'; ctx.letterSpacing = '4px';
                 ctx.fillText("ORCHESTRA", 600, 100); ctx.fillText("MEZZANINE", 600, 525); ctx.fillText("BALCONY", 600, 725);
                 ctx.font = '10px Inter'; ctx.letterSpacing = '0px';
-                rowLabels.forEach(lbl => { ctx.fillText(lbl.text, lbl.x, lbl.y); });
-                seats.forEach(s => { ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2); ctx.fillStyle = s.c; ctx.fill(); });
+                rowLabels.forEach(lbl => ctx.fillText(lbl.text, lbl.x, lbl.y));
+                seats.forEach(s => { ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2); ctx.fillStyle = tiers[s.t].color; ctx.fill(); });
                 ctx.restore();
             }
 
-            function setupInteraction() {
-                const canvas = document.getElementById('seat-canvas'); if(!canvas) return;
-                canvas.addEventListener('wheel', (e) => { e.preventDefault(); const factor = 1 + ((e.deltaY > 0 ? -1 : 1) * 0.1); scale *= factor; scale = Math.min(Math.max(0.5, scale), 4); draw(); });
-                canvas.addEventListener('mousedown', (e) => { isDragging = true; startDrag = { x: e.clientX - pX, y: e.clientY - pY }; canvas.style.cursor = 'grabbing'; });
-                window.addEventListener('mouseup', () => { isDragging = false; canvas.style.cursor = 'grab'; });
+            function setupCanvasEvents() {
+                const canvas = document.getElementById('seat-canvas');
+                
+                // --- PAINT & PAN LOGIC ---
+                canvas.addEventListener('mousedown', (e) => {
+                    const pos = getWorldPos(e);
+                    if (mapMode === 'paint') {
+                        let h=false; 
+                        const hitR = (15 / scale)**2; 
+                        for(let s of seats){ if((pos.x-s.x)**2+(pos.y-s.y)**2 < hitR) {s.t=activeTool; h=true;}}
+                        if(h) { isPainting=true; draw(); } else { isDragging=true; startDrag={x:e.clientX-pX,y:e.clientY-pY}; canvas.style.cursor='grabbing';}
+                    } else { isDragging=true; startDrag={x:e.clientX-pX,y:e.clientY-pY}; canvas.style.cursor='grabbing'; }
+                });
+
                 window.addEventListener('mousemove', (e) => {
-                    if(isDragging) { pX = e.clientX - startDrag.x; pY = e.clientY - startDrag.y; draw(); } else {
-                        const rect = canvas.getBoundingClientRect(); const mouseX = (e.clientX - rect.left) * (canvas.width / rect.width); const mouseY = (e.clientY - rect.top) * (canvas.height / rect.height);
-                        const tx = (mouseX - pX) / scale; const ty = (mouseY - pY) / scale;
-                        let hovered = null; for(let i=0; i<seats.length; i++) { const s = seats[i]; const dx = tx - s.x; const dy = ty - s.y; if ((dx*dx + dy*dy) < 36) { hovered = s; break; } }
-                        if(hovered) { document.getElementById('hover-info').textContent = hovered.l; document.getElementById('hover-tier').textContent = hovered.t; canvas.style.cursor = 'pointer'; } else { canvas.style.cursor = 'grab'; }
+                    if (isPainting && mapMode === 'paint') {
+                        const pos=getWorldPos(e); let ch=false; const hitR = (15 / scale)**2;
+                        for(let s of seats) { if((pos.x-s.x)**2+(pos.y-s.y)**2 < hitR) { if(s.t!==activeTool){s.t=activeTool; ch=true;} } }
+                        if(ch) draw();
+                    } else if(isDragging) { pX=e.clientX-startDrag.x; pY=e.clientY-startDrag.y; draw(); }
+                    else {
+                        const pos=getWorldPos(e); let h=null; const hitR = (15 / scale)**2; 
+                        for(let s of seats){ if((pos.x-s.x)**2+(pos.y-s.y)**2 < hitR){h=s; break;} }
+                        if(h){ document.getElementById('hover-info').textContent=h.l; document.getElementById('hover-tier').textContent=tiers[h.t].name; canvas.style.cursor='crosshair';}
+                        else canvas.style.cursor=mapMode==='paint'?'crosshair':'grab';
                     }
                 });
+
+                // --- TOUCH LOGIC FOR MOBILE ---
+                canvas.addEventListener('touchstart', (e) => {
+                    e.preventDefault();
+                    const touch = e.touches[0];
+                    const pos = getWorldPos(touch);
+                    
+                    if (mapMode === 'paint') {
+                         let h=false; const hitR = (20 / scale)**2; // Bigger hit area for finger
+                         for(let s of seats){ if((pos.x-s.x)**2+(pos.y-s.y)**2 < hitR) {s.t=activeTool; h=true;}}
+                         if(h) { isPainting=true; draw(); } else { isDragging=true; startDrag={x:touch.clientX-pX,y:touch.clientY-pY}; }
+                    } else {
+                         isDragging=true; startDrag={x:touch.clientX-pX,y:touch.clientY-pY};
+                    }
+                }, {passive: false});
+
+                canvas.addEventListener('touchmove', (e) => {
+                    e.preventDefault();
+                    const touch = e.touches[0];
+                    if (isPainting && mapMode === 'paint') {
+                        const pos=getWorldPos(touch); let ch=false; const hitR = (20 / scale)**2;
+                        for(let s of seats) { if((pos.x-s.x)**2+(pos.y-s.y)**2 < hitR) { if(s.t!==activeTool){s.t=activeTool; ch=true;} } }
+                        if(ch) draw();
+                    } else if(isDragging) {
+                        pX=touch.clientX-startDrag.x; pY=touch.clientY-startDrag.y; draw();
+                    }
+                }, {passive: false});
+
+                window.addEventListener('mouseup', ()=>{ if(isPainting) window.recalcAll(true); isPainting=false; isDragging=false; canvas.style.cursor = mapMode==='paint'?'crosshair':'grab'; });
+                window.addEventListener('touchend', ()=>{ if(isPainting) window.recalcAll(true); isPainting=false; isDragging=false; });
+
+                canvas.addEventListener('wheel', (e)=>{ e.preventDefault(); const f=1+((e.deltaY>0?-1:1)*0.1); scale=Math.min(Math.max(0.5,scale*f),4); draw(); });
             }
 
             window.mapZoomIn = () => { scale *= 1.2; draw(); }; window.mapZoomOut = () => { scale /= 1.2; draw(); }; window.mapReset = () => { scale = 1; pX = 0; pY = 0; draw(); };
-
-            window.switchTab = function(tabId) {
-                document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
-                document.querySelectorAll('button[id^="btn-"]').forEach(btn => { btn.classList.remove('bg-white', 'text-slate-900', 'shadow-sm'); btn.classList.add('text-slate-600'); });
-                const tab = document.getElementById('tab-' + tabId); if(tab) tab.classList.remove('hidden');
-                const btn = document.getElementById('btn-' + tabId); if(btn) { btn.classList.remove('text-slate-600'); btn.classList.add('bg-white', 'text-slate-900', 'shadow-sm'); }
-            };
-
-            function calculateFinancials() {
-                totalTicketRevenue = optimizedData.reduce((sum, t) => sum + (t.seats * t.price), 0);
-                // kpi-uplift and kpi-percent were removed from HTML, so I removed the JS refs too.
-                document.getElementById('kpi-optimized').textContent = formatCurrency(totalTicketRevenue);
-                renderChart(proposedRevenue, totalTicketRevenue);
-                renderBenchmarkChart();
-                window.updateBudget(); 
-            }
-
-            function renderChart(proposed, optimized) {
-                const canvas = document.getElementById('revenueChart'); if(!canvas) return; const ctx = canvas.getContext('2d');
-                new Chart(ctx, { type: 'bar', data: { labels: ['Proposal', 'Optimized'], datasets: [{ data: [proposed, optimized], backgroundColor: ['#94a3b8', '#4f46e5'], borderRadius: 4 }] }, options: { plugins: { legend: false }, scales: { y: { beginAtZero: true }, x: { grid: { display: false } } } } });
-            }
-
-            function renderBenchmarkChart() {
-                const canvas = document.getElementById('benchmarkChart'); if(!canvas) return; const ctx = canvas.getContext('2d');
-                new Chart(ctx, { type: 'bar', data: { labels: ['Proposal', 'Optimized', 'HASC', 'Ribo', 'Raichel'], datasets: [{ label: 'Price Range', data: [[50, 400], [75, 360], [100, 500], [90, 360], [70, 150]], backgroundColor: ['#94a3b8', '#4f46e5', '#a855f7', '#3b82f6', '#06b6d4'], borderRadius: 4, barThickness: 30, borderSkipped: false }] }, options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { beginAtZero: true } } } });
-            }
-
+            window.switchTab = function(tabId) { document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden')); document.querySelectorAll('button[id^="btn-"]').forEach(btn => { btn.classList.remove('bg-white', 'text-slate-900', 'shadow-sm'); btn.classList.add('text-slate-600'); }); const tab = document.getElementById('tab-' + tabId); if(tab) tab.classList.remove('hidden'); const btn = document.getElementById('btn-' + tabId); if(btn) { btn.classList.remove('text-slate-600'); btn.classList.add('bg-white', 'text-slate-900', 'shadow-sm'); }};
             function formatCurrency(num) { return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(num); }
+            function renderChart(ai, user) { const canvas = document.getElementById('revenueChart'); if(!canvas) return; const ctx = canvas.getContext('2d'); revChart = new Chart(ctx, { type: 'bar', data: { labels: ['AI Optimized', 'Your Scenario'], datasets: [{ label: 'Revenue ($)', data: [ai, user], backgroundColor: ['#6366f1', '#22c55e'], borderRadius: 4 }] }, options: { plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true }, x: { grid: { display: false } } } } }); }
 
-            document.addEventListener('DOMContentLoaded', () => { initMap(); calculateFinancials(); window.switchTab('financials'); });
-
+            function renderBenchmarkChart() { const canvas = document.getElementById('benchmarkChart'); if(!canvas) return; const ctx = canvas.getContext('2d'); new Chart(ctx, { type: 'bar', data: { labels: ['Proposal', 'Optimized', 'HASC', 'Ribo', 'Raichel'], datasets: [{ label: 'Price Range', data: [[50, 400], [75, 360], [100, 500], [90, 360], [70, 150]], backgroundColor: ['#94a3b8', '#4f46e5', '#a855f7', '#3b82f6', '#06b6d4'], borderRadius: 4, barThickness: 30, borderSkipped: false }] }, options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { beginAtZero: true } } } }); }
+            
+            document.addEventListener('DOMContentLoaded', () => { init(); });
         })();
     </script>
 </body>
