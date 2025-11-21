@@ -1,0 +1,633 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Meridian Hall Pricing Master Dashboard v25</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.7.0/chart.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; }
+        
+        .chart-container { position: relative; width: 100%; height: 300px; }
+        @media (min-width: 768px) { .chart-container { height: 400px; } }
+
+        #seat-canvas {
+            cursor: grab;
+            background-color: #fff;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+        #seat-canvas:active { cursor: grabbing; }
+        
+        .legend-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; margin-right: 6px; }
+        
+        .custom-scrollbar::-webkit-scrollbar { width: 8px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; border: 2px solid #f1f5f9; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+        [hidden] { display: none !important; }
+    </style>
+    <!-- V25: Full Research Tab, Artist Chart Restored, Brown Free Tier, Detailed Strategy -->
+</head>
+<body class="bg-slate-50 text-slate-900 min-h-screen">
+
+    <div class="max-w-7xl mx-auto p-4 sm:p-6 lg:p-8">
+        
+        <!-- GLOBAL HEADER -->
+        <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200 mb-6 flex flex-col md:flex-row justify-between items-start md:items-center">
+            <div>
+                <h1 class="text-2xl md:text-3xl font-bold text-slate-800">JRCC 45th Anniversary Pricing</h1>
+                <p class="text-slate-500 mt-1 flex items-center gap-2">
+                    <span class="px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded text-xs font-bold uppercase">Optimized v25</span>
+                    Meridian Hall • March 19, 2026
+                </p>
+            </div>
+            <div class="mt-4 md:mt-0 text-right border-l-0 md:border-l border-slate-100 md:pl-6">
+                <p class="text-xs text-slate-500 uppercase tracking-wider font-semibold">Total Potential Revenue</p>
+                <p id="global-revenue" class="text-3xl md:text-4xl font-bold text-indigo-600">$0</p>
+            </div>
+        </div>
+
+        <!-- NAVIGATION TABS -->
+        <div class="flex space-x-1 bg-slate-200 p-1 rounded-lg mb-6 max-w-4xl overflow-x-auto">
+            <button onclick="window.switchTab('financials')" id="btn-financials" class="flex-1 whitespace-nowrap py-2 px-4 rounded-md text-sm font-bold shadow-sm bg-white text-slate-900 transition-all">
+                1. Financials
+            </button>
+            <button onclick="window.switchTab('map')" id="btn-map" class="flex-1 whitespace-nowrap py-2 px-4 rounded-md text-sm font-medium text-slate-600 hover:bg-white/50 transition-all">
+                2. Exact Seat Map
+            </button>
+            <button onclick="window.switchTab('artists')" id="btn-artists" class="flex-1 whitespace-nowrap py-2 px-4 rounded-md text-sm font-medium text-slate-600 hover:bg-white/50 transition-all">
+                3. Artist Intel
+            </button>
+            <button onclick="window.switchTab('research')" id="btn-research" class="flex-1 whitespace-nowrap py-2 px-4 rounded-md text-sm font-medium text-slate-600 hover:bg-white/50 transition-all">
+                4. Seasonality & Events
+            </button>
+        </div>
+
+        <!-- TAB 1: FINANCIALS -->
+        <div id="tab-financials" class="space-y-6 tab-content">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                    <h3 class="text-slate-500 text-xs font-bold uppercase tracking-wide">Current Proposal (Est.)</h3>
+                    <p class="text-2xl font-bold text-slate-400 mt-2">$226,125</p>
+                    <p class="text-xs text-slate-400 mt-1">Based on uploaded file prices</p>
+                </div>
+                <div class="bg-white p-6 rounded-xl shadow-sm border border-indigo-100 ring-1 ring-indigo-50">
+                    <h3 class="text-indigo-600 text-xs font-bold uppercase tracking-wide">Optimized Model</h3>
+                    <p id="kpi-optimized" class="text-2xl font-bold text-indigo-700 mt-2">$0</p>
+                    <p class="text-xs text-indigo-500 mt-1">Using tiered zones</p>
+                </div>
+                <div class="bg-green-50 p-6 rounded-xl shadow-sm border border-green-100">
+                    <h3 class="text-green-700 text-xs font-bold uppercase tracking-wide">Net Revenue Uplift</h3>
+                    <p id="kpi-uplift" class="text-2xl font-bold text-green-700 mt-2">$0</p>
+                    <p id="kpi-percent" class="text-xs text-green-600 mt-1">0% Increase</p>
+                </div>
+            </div>
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                    <h3 class="font-bold text-slate-800 mb-4">Revenue Comparison</h3>
+                    <div class="chart-container"><canvas id="revenueChart"></canvas></div>
+                </div>
+                <!-- FULL STRATEGIC INSIGHT -->
+                <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                    <div class="flex items-center gap-3 mb-4">
+                        <div class="bg-indigo-100 p-2 rounded-lg">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-indigo-700" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                        </div>
+                        <h3 class="font-bold text-slate-800 text-lg">Strategic Insight: Why Only 4 Tiers?</h3>
+                    </div>
+                    
+                    <div class="space-y-4">
+                        <div class="p-3 bg-slate-50 rounded border border-slate-100">
+                            <h4 class="font-bold text-slate-700 text-sm mb-1">1. Eliminating Decision Paralysis</h4>
+                            <p class="text-sm text-slate-600 leading-relaxed">
+                                Behavioral economics shows that offering 6-8 price options causes "Analysis Paralysis," leading customers to delay purchase. By consolidating to 4 distinct choices, we force a quicker, more confident buying decision.
+                            </p>
+                        </div>
+
+                        <div class="p-3 bg-slate-50 rounded border border-slate-100">
+                            <h4 class="font-bold text-slate-700 text-sm mb-1">2. Physical Alignment</h4>
+                            <p class="text-sm text-slate-600 leading-relaxed">
+                                Meridian Hall naturally divides into 4 clear value zones: <span class="italic">Center Orch (VIP), Side/Rear Orch (Premium/Standard), and Balcony (Entry)</span>. Creating 6 price points forces you to draw arbitrary lines across identical seats.
+                            </p>
+                        </div>
+
+                        <div class="p-3 bg-slate-50 rounded border border-slate-100">
+                            <h4 class="font-bold text-slate-700 text-sm mb-1">3. Marketing Clarity</h4>
+                            <p class="text-sm text-slate-600 leading-relaxed">
+                                It is far more effective to market a "Festival Lineup" with a clear "Entry Price" ($75) and an "Exclusive VIP" ($360). Granular price differences dilute the value proposition.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB 2: EXACT SEAT MAP -->
+        <div id="tab-map" class="hidden space-y-6 tab-content">
+            <div class="bg-indigo-900 text-white p-6 rounded-xl shadow-lg mb-6">
+                <h2 class="text-xl font-bold mb-4 flex items-center gap-2">Excel Button Guide</h2>
+                <div class="grid grid-cols-4 sm:grid-cols-8 gap-3 text-center">
+                    <div class="bg-blue-500 p-2 rounded border-2 border-blue-300">
+                        <p class="text-[10px] opacity-70 font-bold">Price Level 1</p><p class="font-bold text-lg">$360</p>
+                    </div>
+                    <div class="bg-pink-500 p-2 rounded border-2 border-pink-300">
+                        <p class="text-[10px] opacity-70 font-bold">Price Level 2</p><p class="font-bold text-lg">$180</p>
+                    </div>
+                    <div class="bg-purple-500 p-2 rounded border-2 border-purple-300">
+                        <p class="text-[10px] opacity-70 font-bold">Price Level 3</p><p class="font-bold text-lg">$110</p>
+                    </div>
+                    <div class="bg-orange-400 p-2 rounded border-2 border-orange-200">
+                        <p class="text-[10px] opacity-70 font-bold text-orange-900">Price Level 4</p><p class="font-bold text-lg text-orange-900">$75</p>
+                    </div>
+                    <div class="bg-slate-700 p-2 rounded opacity-50 border-2 border-dashed border-slate-500"><p class="text-[10px]">Price Level 5</p><p class="text-xs">Unused</p></div>
+                    <div class="bg-slate-700 p-2 rounded opacity-50 border-2 border-dashed border-slate-500"><p class="text-[10px]">Price Level 6</p><p class="text-xs">Unused</p></div>
+                    <!-- Brown for Free -->
+                    <div class="bg-amber-900 p-2 rounded border-2 border-amber-700 col-span-2"><p class="text-[10px]">Price Level 7/8</p><p class="font-bold text-lg">Free</p></div>
+                </div>
+            </div>
+
+            <div class="flex flex-col lg:flex-row gap-6">
+                <div class="flex-1 bg-white p-4 rounded-2xl shadow-lg border border-slate-200 overflow-hidden relative flex flex-col items-center">
+                    
+                    <!-- Toolbar -->
+                    <div class="w-full flex justify-between items-center mb-4">
+                        <h2 class="text-lg font-bold text-slate-800">Interactive Venue Map</h2>
+                        <div class="flex gap-2">
+                            <button onclick="window.mapZoomOut()" class="px-3 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded border border-slate-300 font-bold">-</button>
+                            <button onclick="window.mapReset()" class="px-3 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded border border-slate-300 text-xs">Reset</button>
+                            <button onclick="window.mapZoomIn()" class="px-3 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded border border-slate-300 font-bold">+</button>
+                        </div>
+                    </div>
+                    
+                    <div class="relative overflow-hidden w-full h-[600px] bg-slate-50 rounded border border-slate-100 p-0">
+                         <canvas id="seat-canvas" width="1200" height="1000" class="w-full h-full block"></canvas>
+                         <div class="absolute bottom-4 left-4 bg-white/90 px-3 py-2 rounded text-xs text-slate-500 border border-slate-200 shadow-sm pointer-events-none">
+                             Stage is at Top • Scroll to Zoom
+                         </div>
+                    </div>
+                    
+                    <div class="mt-4 flex flex-wrap gap-4 justify-center text-xs text-slate-600">
+                        <div class="flex items-center"><span class="legend-dot bg-blue-500"></span>VIP ($360)</div>
+                        <div class="flex items-center"><span class="legend-dot bg-pink-500"></span>Premium ($180)</div>
+                        <div class="flex items-center"><span class="legend-dot bg-purple-500"></span>Standard ($110)</div>
+                        <div class="flex items-center"><span class="legend-dot bg-orange-400"></span>Entry ($75)</div>
+                        <div class="flex items-center"><span class="legend-dot bg-amber-900"></span>Free</div>
+                    </div>
+                </div>
+                
+                <div class="w-full lg:w-64 flex flex-col gap-4 h-[600px]">
+                    <div class="bg-white flex flex-col h-full rounded-xl shadow-md border border-slate-200 overflow-hidden relative">
+                        <div class="p-5 border-b border-slate-100 bg-slate-50 flex-shrink-0">
+                            <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wide mb-1">Seat Details</h3>
+                            <h2 id="hover-info" class="text-lg font-bold text-indigo-700 leading-tight">--</h2>
+                            <div class="flex items-center gap-2 mt-2">
+                                <span id="hover-tier" class="text-sm font-bold text-slate-600">--</span>
+                            </div>
+                        </div>
+                        <div class="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-4 bg-white">
+                             <div>
+                                <h4 class="text-xs font-bold text-slate-500 uppercase border-b pb-1 mb-2">Orchestra Rules</h4>
+                                <p class="text-xs text-slate-600 mb-2"><strong class="text-blue-600">Center Fan (Front):</strong> Lvl 1 (VIP). Rows AA-K.</p>
+                                <p class="text-xs text-slate-600 mb-2"><strong class="text-pink-500">Center Fan (Rear):</strong> Lvl 2 (Prem). Rows L-Z.</p>
+                                <p class="text-xs text-slate-600 mb-2"><strong class="text-purple-500">Side Wings:</strong> Lvl 3 (Std). All rows.</p>
+                             </div>
+                             <div>
+                                <h4 class="text-xs font-bold text-slate-500 uppercase border-b pb-1 mb-2">Balcony Rules</h4>
+                                <p class="text-xs text-slate-600 mb-2"><strong class="text-orange-500">Front Rows (A-H):</strong> Lvl 4 (Entry).</p>
+                                <p class="text-xs text-slate-600"><strong class="text-amber-900">Rear/Sides:</strong> Free (Level 7/8).</p>
+                             </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB 3: ARTISTS (FULL CONTENT + CHART) -->
+        <div id="tab-artists" class="hidden space-y-6 tab-content">
+             <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200 mb-6">
+                <h2 class="text-xl font-bold text-slate-800 mb-4">Historical Comparison</h2>
+                <p class="text-slate-600 mb-6">Price range comparison against similar artist events.</p>
+                
+                <!-- BENCHMARK CHART -->
+                <div class="chart-container mb-8 h-64">
+                    <canvas id="benchmarkChart"></canvas>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                <table class="min-w-full divide-y divide-slate-200">
+                    <thead class="bg-slate-50">
+                        <tr>
+                            <th class="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase">Artist</th>
+                            <th class="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase">Event</th>
+                            <th class="px-6 py-3 text-right text-xs font-bold text-slate-500 uppercase">VIP Price</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-200">
+                        <!-- Fried -->
+                        <tr class="bg-blue-50/30">
+                            <td class="px-6 py-4 font-bold text-indigo-900">Avraham Fried</td>
+                            <td class="px-6 py-4 text-sm text-slate-600">HASC Concert (Annual)</td>
+                            <td class="px-6 py-4 text-right text-sm font-bold text-slate-800">$500 - $1,000</td>
+                        </tr>
+                        <tr>
+                            <td class="px-6 py-4 font-medium text-slate-900">Avraham Fried</td>
+                            <td class="px-6 py-4 text-sm text-slate-600">Solo Concert Tour</td>
+                            <td class="px-6 py-4 text-right text-sm font-bold text-slate-800">₪500 ($180 CAD)</td>
+                        </tr>
+                        <!-- Akiva -->
+                        <tr class="bg-pink-50/30">
+                            <td class="px-6 py-4 font-bold text-pink-900">Akiva</td>
+                            <td class="px-6 py-4 text-sm text-slate-600">US Tour 2023</td>
+                            <td class="px-6 py-4 text-right text-sm font-bold text-slate-800">$180</td>
+                        </tr>
+                        <tr>
+                            <td class="px-6 py-4 font-medium text-slate-900">Akiva</td>
+                            <td class="px-6 py-4 text-sm text-slate-600">Live in Concert</td>
+                            <td class="px-6 py-4 text-right text-sm font-bold text-slate-800">₪299 ($110 CAD)</td>
+                        </tr>
+                        <!-- Dadon -->
+                        <tr class="bg-purple-50/30">
+                            <td class="px-6 py-4 font-bold text-purple-900">Amir Dadon</td>
+                            <td class="px-6 py-4 text-sm text-slate-600">Winter Tour</td>
+                            <td class="px-6 py-4 text-right text-sm font-bold text-slate-800">₪249 ($90 CAD)</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- TAB 4: RESEARCH (FULL CONTENT) -->
+        <div id="tab-research" class="hidden space-y-6 tab-content">
+            <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                <div class="flex items-center gap-3 mb-6">
+                    <div class="bg-green-100 p-2 rounded-lg text-green-700">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                    </div>
+                    <h2 class="text-2xl font-bold text-slate-800">Date Analysis: March 19, 2026</h2>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <!-- Calendar Context -->
+                    <div>
+                        <h3 class="text-lg font-bold text-slate-700 mb-3 border-b pb-2">1. The Jewish "Sweet Spot"</h3>
+                        <p class="text-slate-600 mb-4 leading-relaxed">
+                            March 19th falls perfectly between two major holidays:
+                        </p>
+                        <ul class="space-y-3">
+                            <li class="flex items-center gap-3 p-3 bg-slate-50 rounded border border-slate-100">
+                                <span class="text-xs font-bold bg-slate-200 text-slate-600 px-2 py-1 rounded">Mar 3</span>
+                                <span>Purim (Ended)</span>
+                            </li>
+                            <li class="flex items-center gap-3 p-3 bg-green-50 rounded border border-green-200 ring-1 ring-green-200">
+                                <span class="text-xs font-bold bg-green-600 text-white px-2 py-1 rounded">Mar 19</span>
+                                <span class="font-bold text-green-800">JRCC 45th Anniversary</span>
+                                <span class="ml-auto text-xs text-green-700 font-medium">Optimal Window</span>
+                            </li>
+                            <li class="flex items-center gap-3 p-3 bg-slate-50 rounded border border-slate-100">
+                                <span class="text-xs font-bold bg-slate-200 text-slate-600 px-2 py-1 rounded">Apr 2</span>
+                                <span>Passover (Starts)</span>
+                            </li>
+                        </ul>
+                        <p class="text-xs text-slate-500 mt-3 italic">
+                            <strong>Insight:</strong> The community is past the Purim rush but not yet in full "Passover cleaning panic." It is the ideal window for a night out.
+                        </p>
+                    </div>
+
+                    <!-- Secular Context -->
+                    <div>
+                        <h3 class="text-lg font-bold text-slate-700 mb-3 border-b pb-2">2. Ontario March Break</h3>
+                        <p class="text-slate-600 mb-4 leading-relaxed">
+                            This date likely falls during the Ontario School March Break.
+                        </p>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div class="p-4 bg-blue-50 rounded-lg border border-blue-100">
+                                <h4 class="font-bold text-blue-800 mb-1">Pros</h4>
+                                <ul class="text-xs text-blue-700 list-disc list-inside space-y-1">
+                                    <li>Kids are off school.</li>
+                                    <li>Families looking for activities.</li>
+                                </ul>
+                            </div>
+                            <div class="p-4 bg-orange-50 rounded-lg border border-orange-100">
+                                <h4 class="font-bold text-orange-800 mb-1">Cons</h4>
+                                <ul class="text-xs text-orange-700 list-disc list-inside space-y-1">
+                                    <li>Some families travel.</li>
+                                </ul>
+                            </div>
+                        </div>
+                        <p class="text-xs text-slate-500 mt-3 italic">
+                            <strong>Strategy:</strong> Market heavily to families staying in town. The $75 price point (Price Level 4) is crucial here.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        (function() {
+            // --- CONFIG ---
+            const proposedRevenue = 226125;
+            const optimizedData = [
+                { excelLevel: 'Level 1', name: 'VIP', seats: 300, price: 360 },
+                { excelLevel: 'Level 2', name: 'Premium', seats: 900, price: 180 },
+                { excelLevel: 'Level 3', name: 'Standard', seats: 850, price: 110 },
+                { excelLevel: 'Level 4', name: 'Entry', seats: 550, price: 75 },
+                { excelLevel: 'Level 7/8', name: 'Free', seats: 566, price: 0 }
+            ];
+
+            // UPDATED COLORS TO MATCH REQUEST
+            const TierColors = { 
+                VIP: '#3b82f6',   // Blue (Lvl 1)
+                PREM: '#ec4899',  // Pink (Lvl 2)
+                STD: '#a855f7',   // Purple (Lvl 3)
+                ENTRY: '#fb923c', // Light Orange (Lvl 4)
+                FREE: '#713f12'   // Brown (Free)
+            };
+            
+            let seats = [];
+            let rowLabels = []; 
+            let scale = 1;
+            let pX = 0;
+            let pY = 0;
+            let isDragging = false;
+            let startDrag = { x: 0, y: 0 };
+
+            // --- MAP GENERATION ---
+            function initMap() {
+                seats = [];
+                rowLabels = [];
+                const canvas = document.getElementById('seat-canvas');
+                if(!canvas) return;
+                
+                // 1. ORCHESTRA CENTER
+                for(let r=0; r<25; r++) {
+                    const rowLabel = (r < 5) ? ['AA','BB','CC','DD','EE'][r] : String.fromCharCode(65 + (r-5));
+                    const seatsInRow = 25 + r; 
+                    const y = 120 + (r * 14);
+                    const rowWidth = 300 + (r * 12);
+                    const xStart = 600 - (rowWidth/2);
+                    const xStep = rowWidth / seatsInRow;
+                    
+                    rowLabels.push({x: xStart - 20, y: y, text: rowLabel});
+                    rowLabels.push({x: xStart + rowWidth + 10, y: y, text: rowLabel});
+
+                    for(let s=0; s<seatsInRow; s++) {
+                        const finalX = xStart + (s * xStep);
+                        const curveOffset = Math.cos((s - seatsInRow/2) * 0.15) * 10;
+                        
+                        let c = TierColors.STD;
+                        let t = "Price Level 3";
+                        if (r < 12) { c = TierColors.VIP; t = "Price Level 1"; } 
+                        else if (r < 20) { c = TierColors.PREM; t = "Price Level 2"; }
+
+                        seats.push({x: finalX, y: y - curveOffset, r: 4, c: c, l: `Orch Ctr Row ${rowLabel}`, t: t});
+                    }
+                }
+
+                // 2. SIDE WINGS
+                const sideRowLetters = ['A','B','C','D','E','F','G','H','J','K','L','M','N','P','R','S','T','U','V','W'];
+                for(let r=0; r<20; r++) {
+                    const y = 180 + (r * 14);
+                    const xBaseL = 250 - (r * 8); 
+                    const xBaseR = 950 + (r * 8);
+                    
+                    rowLabels.push({x: xBaseL - 160, y: y, text: sideRowLetters[r]}); 
+                    rowLabels.push({x: xBaseR + 160, y: y, text: sideRowLetters[r]});
+
+                    for(let s=0; s<15; s++) {
+                        const tilt = s * 5;
+                        seats.push({x: xBaseL - (s*10), y: y - tilt, r: 4, c: TierColors.STD, l: `Orch Left Row ${sideRowLetters[r]}`, t: 'Price Level 3'});
+                        seats.push({x: xBaseR + (s*10), y: y - tilt, r: 4, c: TierColors.STD, l: `Orch Right Row ${sideRowLetters[r]}`, t: 'Price Level 3'});
+                    }
+                }
+
+                // 3. MEZZANINE
+                const mezzLetters = ['AA','BB','CC','DD','EE','FF'];
+                for(let r=0; r<6; r++) {
+                    const width = 60;
+                    const lbl = mezzLetters[r];
+                    const midY = 550 + (r * 14);
+                    rowLabels.push({x: 280, y: midY, text: lbl});
+                    rowLabels.push({x: 920, y: midY, text: lbl});
+
+                    for(let s=0; s<width; s++) {
+                        const curveY = midY + (Math.cos((s-30)*0.1)*25);
+                        let c = (r < 2) ? TierColors.PREM : TierColors.STD;
+                        let t = (r < 2) ? "Price Level 2" : "Price Level 3";
+                        seats.push({x: 300 + (s*10), y: curveY, r: 3.5, c: c, l: `Mezz Row ${lbl}`, t: t});
+                    }
+                }
+
+                // 4. BALCONY
+                const balcLetters = ['A','B','C','D','E','F','G','H','J','K','L','M'];
+                for(let r=0; r<12; r++) {
+                    const width = 40;
+                    const lbl = balcLetters[r];
+                    const midY = 750 + (r * 12);
+                    rowLabels.push({x: 380, y: midY, text: lbl});
+                    rowLabels.push({x: 820, y: midY, text: lbl});
+
+                    for(let s=0; s<width; s++) {
+                        const curveY = midY + (Math.cos((s-20)*0.15)*10);
+                        let c = (r < 5) ? TierColors.ENTRY : TierColors.FREE;
+                        let t = (r < 5) ? "Price Level 4" : "Price Level 7/8";
+                        seats.push({x: 400 + (s*10), y: curveY, r: 3, c: c, l: `Balc Ctr Row ${lbl}`, t: t});
+                    }
+                }
+                // Balc Wings (Free)
+                for(let r=0; r<12; r++) {
+                    for(let s=0; s<14; s++) {
+                        seats.push({x: 150 + (s*10), y: 750 + (r*10), r: 3, c: TierColors.FREE, l: `Balc Left`, t: 'Price Level 7/8'});
+                        seats.push({x: 900 + (s*10), y: 750 + (r*10), r: 3, c: TierColors.FREE, l: `Balc Right`, t: 'Price Level 7/8'});
+                    }
+                }
+
+                draw();
+                setupInteraction();
+            }
+
+            function draw() {
+                const canvas = document.getElementById('seat-canvas');
+                if(!canvas) return;
+                const ctx = canvas.getContext('2d');
+                
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                ctx.save();
+                ctx.setTransform(scale, 0, 0, scale, pX, pY);
+
+                ctx.fillStyle = '#1e293b';
+                ctx.fillRect(450, 20, 300, 40);
+                ctx.fillStyle = '#fff';
+                ctx.font = '14px Inter';
+                ctx.fillText("STAGE", 580, 45);
+
+                ctx.fillStyle = '#64748b';
+                ctx.font = 'bold 16px Inter';
+                ctx.textAlign = 'center';
+                ctx.letterSpacing = '4px';
+                ctx.fillText("ORCHESTRA", 600, 100);
+                ctx.fillText("MEZZANINE", 600, 525);
+                ctx.fillText("BALCONY", 600, 725);
+
+                ctx.font = '10px Inter';
+                ctx.letterSpacing = '0px';
+                rowLabels.forEach(lbl => {
+                    ctx.fillText(lbl.text, lbl.x, lbl.y);
+                });
+
+                seats.forEach(s => {
+                    ctx.beginPath();
+                    ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+                    ctx.fillStyle = s.c;
+                    ctx.fill();
+                });
+
+                ctx.restore();
+            }
+
+            function setupInteraction() {
+                const canvas = document.getElementById('seat-canvas');
+                if(!canvas) return;
+
+                canvas.addEventListener('wheel', (e) => {
+                    e.preventDefault();
+                    const factor = 1 + ((e.deltaY > 0 ? -1 : 1) * 0.1);
+                    scale *= factor;
+                    scale = Math.min(Math.max(0.5, scale), 4);
+                    draw();
+                });
+
+                canvas.addEventListener('mousedown', (e) => {
+                    isDragging = true;
+                    startDrag = { x: e.clientX - pX, y: e.clientY - pY };
+                    canvas.style.cursor = 'grabbing';
+                });
+
+                window.addEventListener('mouseup', () => {
+                    isDragging = false;
+                    canvas.style.cursor = 'grab';
+                });
+
+                window.addEventListener('mousemove', (e) => {
+                    if(isDragging) {
+                        pX = e.clientX - startDrag.x;
+                        pY = e.clientY - startDrag.y;
+                        draw();
+                    } else {
+                        const rect = canvas.getBoundingClientRect();
+                        const mouseX = (e.clientX - rect.left) * (canvas.width / rect.width);
+                        const mouseY = (e.clientY - rect.top) * (canvas.height / rect.height);
+                        const tx = (mouseX - pX) / scale;
+                        const ty = (mouseY - pY) / scale;
+
+                        let hovered = null;
+                        for(let i=0; i<seats.length; i++) {
+                            const s = seats[i];
+                            const dx = tx - s.x;
+                            const dy = ty - s.y;
+                            if ((dx*dx + dy*dy) < 36) { hovered = s; break; }
+                        }
+
+                        if(hovered) {
+                            document.getElementById('hover-info').textContent = hovered.l;
+                            document.getElementById('hover-tier').textContent = hovered.t;
+                            canvas.style.cursor = 'pointer';
+                        } else {
+                            canvas.style.cursor = 'grab';
+                        }
+                    }
+                });
+            }
+
+            window.mapZoomIn = () => { scale *= 1.2; draw(); };
+            window.mapZoomOut = () => { scale /= 1.2; draw(); };
+            window.mapReset = () => { scale = 1; pX = 0; pY = 0; draw(); };
+
+            window.switchTab = function(tabId) {
+                document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+                document.querySelectorAll('button[id^="btn-"]').forEach(btn => {
+                    btn.classList.remove('bg-white', 'text-slate-900', 'shadow-sm');
+                    btn.classList.add('text-slate-600');
+                });
+                const tab = document.getElementById('tab-' + tabId);
+                if(tab) tab.classList.remove('hidden');
+                const btn = document.getElementById('btn-' + tabId);
+                if(btn) {
+                    btn.classList.remove('text-slate-600');
+                    btn.classList.add('bg-white', 'text-slate-900', 'shadow-sm');
+                }
+            };
+
+            function calculateFinancials() {
+                const totalOpt = optimizedData.reduce((sum, t) => sum + (t.seats * t.price), 0);
+                const uplift = totalOpt - proposedRevenue;
+                
+                document.getElementById('global-revenue').textContent = formatCurrency(totalOpt);
+                document.getElementById('kpi-optimized').textContent = formatCurrency(totalOpt);
+                document.getElementById('kpi-uplift').textContent = '+' + formatCurrency(uplift);
+                document.getElementById('kpi-percent').textContent = ((uplift / proposedRevenue) * 100).toFixed(1) + '% Increase';
+
+                renderChart(proposedRevenue, totalOpt);
+                renderBenchmarkChart();
+            }
+
+            function renderChart(proposed, optimized) {
+                const canvas = document.getElementById('revenueChart');
+                if(!canvas) return;
+                const ctx = canvas.getContext('2d');
+                new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: ['Proposal', 'Optimized'],
+                        datasets: [{ data: [proposed, optimized], backgroundColor: ['#94a3b8', '#4f46e5'], borderRadius: 4 }]
+                    },
+                    options: { plugins: { legend: false }, scales: { y: { beginAtZero: true }, x: { grid: { display: false } } } }
+                });
+            }
+
+            function renderBenchmarkChart() {
+                const canvas = document.getElementById('benchmarkChart');
+                if(!canvas) return;
+                const ctx = canvas.getContext('2d');
+                new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: ['Proposal', 'Optimized', 'HASC', 'Ribo', 'Raichel'],
+                        datasets: [{
+                            label: 'Price Range',
+                            data: [[50, 400], [75, 360], [100, 500], [90, 360], [70, 150]],
+                            backgroundColor: ['#94a3b8', '#4f46e5', '#a855f7', '#3b82f6', '#06b6d4'],
+                            borderRadius: 4,
+                            barThickness: 30,
+                            borderSkipped: false
+                        }]
+                    },
+                    options: {
+                        indexAxis: 'y',
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { display: false } },
+                        scales: { x: { beginAtZero: true } }
+                    }
+                });
+            }
+
+            function formatCurrency(num) {
+                return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(num);
+            }
+
+            document.addEventListener('DOMContentLoaded', () => {
+                initMap();
+                calculateFinancials();
+                window.switchTab('financials');
+            });
+
+        })();
+    </script>
+</body>
+</html>
